@@ -51,7 +51,7 @@ APP_NAME=$(basename "$APP_PATH")
 DOCKERFILE="$APP_PATH/Dockerfile"
 COMPOSE_FILE="$APP_PATH/docker-compose.yml"
 
-PYTHON_VERSION=$(python3 --version | awk '{print $2}' | cut -d. -f1,2)
+PYTHON_VERSION=$(python --version | awk '{print $2}' | cut -d. -f1,2)
 
 cat > "$DOCKERFILE" <<EOL
 FROM python:$PYTHON_VERSION-slim
