@@ -1,0 +1,92 @@
+#!/bin/bash
+
+PORT=8501
+ENTRANCE="main.py"
+
+show_help() {
+  echo "Usage: $0 [options] /path/to/streamlit/app"
+  echo "Options:"
+  echo "  -h, --help           Show this help message"
+  echo "  -p, --port PORT      Specify the port number (default: 8501)"
+  echo "  -e, --entrance FILE  Specify the entrance file (default: main.py)"
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    -p|--port)
+      PORT=$2
+      shift 2
+      ;;
+    -e|--entrance)
+      ENTRANCE=$2
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      show_help
+      exit 1
+      ;;
+    *)
+      APP_PATH=$1
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$APP_PATH" ]; then
+  echo "Error: Path to Streamlit app is required."
+  show_help
+  exit 1
+fi
+
+APP_NAME=$(basename "$APP_PATH")
+DOCKERFILE="$APP_PATH/Dockerfile"
+COMPOSE_FILE="$APP_PATH/docker-compose.yml"
+
+PYTHON_VERSION=$(python3 --version | awk '{print $2}' | cut -d. -f1,2)
+
+cat > "$DOCKERFILE" <<EOL
+FROM python:$PYTHON_VERSION-slim
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -r requirements.txt
+CMD ["streamlit", "run", "$ENTRANCE", "--server.port=$PORT", "--server.address=0.0.0.0"]
+EOL
+
+echo "Dockerfile created at $DOCKERFILE"
+
+if [ ! -f "$APP_PATH/requirements.txt" ]; then
+  pip freeze > "$APP_PATH/requirements.txt"
+fi
+
+cat > "$COMPOSE_FILE" <<EOL
+version: '3.8'
+
+services:
+  $APP_NAME:
+    build:
+      context: .
+    ports:
+      - "$PORT:$PORT"
+    volumes:
+      - .:/app
+EOL
+
+echo "docker-compose.yml created at $COMPOSE_FILE"
+
+# Build the Docker image
+if docker-compose -f "$COMPOSE_FILE" build; then
+  echo "Docker image built successfully. Use 'docker-compose up -d' to run the app."
+else
+  echo "Docker image build failed. Please check the logs above for details."
+  exit 1
+fi
+
